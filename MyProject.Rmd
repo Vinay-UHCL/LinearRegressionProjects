@@ -1,0 +1,265 @@
+---
+title: "Analyzing the Influence of Vehicle Attributes on Fuel Consumption and A Linear Regression Approach"
+output: html_notebook
+---
+
+```{r}
+library(ggplot2)
+library(dplyr)
+library(car)
+```
+
+```{r}
+# Read the CSV file
+data <- read.csv("/Users/vinay/Desktop/LinearRegression/project/CO2_Emissions.csv")
+
+str(data)
+```
+
+```{r}
+summary(data)      # Summary statistics
+```
+
+```{r}
+head(data)
+```
+
+```{r}
+sum(is.na(data))
+```
+
+```{r}
+data$Make <- as.factor(data$Make)
+data$Model <- as.factor(data$Model)
+data$Vehicle_Class <- as.factor(data$Vehicle_Class)
+data$Transmission <- as.factor(data$Transmission)
+data$Fuel_Type <- as.factor(data$Fuel_Type)
+```
+
+```{r}
+data <- data %>% 
+  mutate(across(c(Make, Model, Vehicle_Class, Transmission, Fuel_Type), as.integer))
+```
+
+```{r}
+str(data)
+```
+
+```{r}
+model <- lm(Fuel_Consumption_Comb_L_100km ~ EngineSize_L, data = data)
+
+summary(model)
+
+```
+
+```{r}
+# Plot the data and the regression line
+ggplot(data, aes(x = EngineSize_L, y = Fuel_Consumption_Comb_L_100km)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(x = "Engine Size (L)", y = "Fuel Consumption (L/100 km)", 
+       title = "Relationship between Engine Size and Fuel Consumption")
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model)
+```
+
+```{r}
+plot(data$EngineSize_L, data$Fuel_Consumption_Comb_L_100km, 
+     xlab = "Engine Size (L)", ylab = "Fuel Consumption (L/100 km)",
+     main = "Relationship between Engine Size and Fuel Consumption")
+
+```
+
+```{r}
+cylinders_model <- lm(CO2_Emissions_g_per_km ~ Cylinders, data = data)
+
+summary(cylinders_model)
+
+```
+
+```{r}
+ggplot(data, aes(x = Cylinders, y = CO2_Emissions_g_per_km)) +
+  geom_point() +
+  geom_smooth(method = "lm", col = "blue") +
+  labs(x = "Number of Cylinders", y = "CO2 Emissions (g/km)", 
+       title = "Relationship between Number of Cylinders and CO2 Emissions")
+```
+
+```{r}
+# Create dummy variables for 'Vehicle_Class' using model.matrix
+# This creates a full set of dummy variables (one for each class)
+
+
+
+vehicle_class_dummies <- model.matrix(~ Vehicle_Class - 1, data = data)
+
+model_data <- data.frame(Fuel_Consumption_Comb_L_100km = data$Fuel_Consumption_Comb_L_100km, vehicle_class_dummies)
+
+# Fit the linear model
+model_vehicle_class <- lm(Fuel_Consumption_Comb_L_100km ~ ., data = model_data)
+
+summary(model_vehicle_class)
+
+```
+
+```{r}
+plot(model_vehicle_class)
+```
+
+```{r}
+
+vehicle_class_dummies <- model.matrix(~ Vehicle_Class, data = data)[, -1]
+fuel_type_dummies <- model.matrix(~ Fuel_Type, data = data)[, -1]
+transmission_dummies <- model.matrix(~ Transmission, data = data)[, -1]
+
+data <- cbind(data, vehicle_class_dummies, fuel_type_dummies, transmission_dummies)
+
+```
+
+```{r}
+# Fit the multiple linear regression model
+model <- lm(CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + ., data = data)
+
+# View the summary of the model
+summary(model)
+```
+
+```{r}
+model <- lm(CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + Fuel_Consumption_City_L_100km + Fuel_Consumption_Hwy_L_100km + Fuel_Consumption_Comb_L_100km, data = data)
+summary(model)
+```
+
+```{r}
+vif_model <- vif(model)
+vif_model
+
+```
+
+```{r}
+
+data_subset <- data[, c("EngineSize_L", "Cylinders", "Fuel_Consumption_City_L_100km", 
+                        "Fuel_Consumption_Hwy_L_100km", "Fuel_Consumption_Comb_L_100km")]
+
+cor.mat <- round(cor(data_subset), 2)
+
+cor.mat
+
+```
+
+```{r}
+plot(model)
+```
+
+```{r}
+revised_model <- lm(CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+summary(revised_model)
+```
+
+```{r}
+# Check VIF for the revised model
+vif_revised_model <- vif(revised_model)
+vif_revised_model
+```
+
+```{r}
+# Plot diagnostics
+plot(revised_model)
+```
+
+```{r}
+data$log_CO2_Emissions_g_per_km <- log(data$CO2_Emissions_g_per_km)
+
+log_model <- lm(log_CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+summary(log_model)
+```
+
+```{r}
+plot(log_model)
+```
+
+```{r}
+poly_model <- lm(CO2_Emissions_g_per_km ~ poly(EngineSize_L, 2) + Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+interact_model <- lm(CO2_Emissions_g_per_km ~ EngineSize_L * Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+summary(poly_model)
+
+summary(interact_model)
+```
+
+```{r}
+plot(poly_model)
+```
+
+```{r}
+plot(interact_model)
+```
+
+```{r}
+library(MASS)
+
+# Find the optimal Box-Cox transformation for the response variable
+bc <- boxcox(CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+# Identify the lambda that maximizes the log-likelihood
+lambda <- bc$x[which.max(bc$y)]
+
+# Apply the Box-Cox transformation with the identified lambda
+data$BC_CO2_Emissions <- (data$CO2_Emissions_g_per_km^lambda - 1) / lambda
+
+# Fit the model with the Box-Cox transformed response variable
+bc_model <- lm(BC_CO2_Emissions ~ EngineSize_L + Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+# View the summary of the model
+summary(bc_model)
+```
+
+```{r}
+plot(bc_model)
+```
+
+```{r}
+full_model <- lm(CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + Fuel_Consumption_Comb_L_100km, data = data)
+
+stepwise_model <- step(full_model, direction="both")
+
+summary(stepwise_model)
+```
+
+```{r}
+
+data <- read.csv("/Users/vinay/Desktop/LinearRegression/project/CO2_Emissions.csv")
+
+data$Vehicle_Class <- as.factor(data$Vehicle_Class)
+data$Transmission <- as.factor(data$Transmission)
+data$Fuel_Type <- as.factor(data$Fuel_Type)
+
+full_model_cat <- lm(CO2_Emissions_g_per_km ~ EngineSize_L + Cylinders + 
+                     Fuel_Consumption_Comb_L_100km + Vehicle_Class + 
+                     Transmission + Fuel_Type, data = data)
+
+stepwise_model_cat <- step(full_model_cat, direction="both")
+
+summary(stepwise_model_cat)
+```
+
+```{r}
+data <- read.csv("/Users/vinay/Desktop/LinearRegression/project/CO2_Emissions.csv")
+
+data$Transmission <- as.factor(data$Transmission)
+data$Fuel_Type <- as.factor(data$Fuel_Type)
+
+model_fuel_efficiency <- lm(Fuel_Consumption_Comb_L_100km ~ Transmission * Fuel_Type, data = data)
+
+summary(model_fuel_efficiency)
+```
+
+```{r}
+par(mfrow=c(2,2))
+plot(model_fuel_efficiency)
+```
